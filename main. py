@@ -1,0 +1,16 @@
+import os
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+TOKEN = os.getenv("BOT_TOKEN")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Namaste! Bot ready hai ✅ /quiz bhejo")
+
+async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Q1: Bharat ki rajdhani?\nA) Mumbai\nB) Delhi")
+
+app = Application.builder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("quiz", quiz))
+app.run_polling()
