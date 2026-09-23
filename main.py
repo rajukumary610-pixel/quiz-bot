@@ -1,31 +1,73 @@
 import os
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# 10 Quiz Questions
+QUESTIONS = [
+    {"q": "Bharat ki rajdhani kya hai?", "options": ["Mumbai", "Delhi", "Kolkata"], "ans": 1},
+    {"q": "2 + 2 kitna hota hai?", "options": ["3", "4", "5"], "ans": 1},
+    {"q": "Taj Mahal kahan hai?", "options": ["Delhi", "Agra", "Jaipur"], "ans": 1},
+    {"q": "Computer ka dimag kise kehte hai?", "options": ["Mouse", "CPU", "Keyboard"], "ans": 1},
+]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Namaste! 🙏 Bot LIVE ho gaya hai. /quiz likho")
+    await update.message.reply_text("Namaste! 🙏\nQuiz start karne ke liye /quiz likho")
 
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Q1: Bharat ki rajdhani kya hai?\nA) Mumbai\nB) Delhi\nC) Kolkata\n\nJawab B hai!")
+    context.user_data['score'] = 0
+    context.user_data['q_index'] = 0
+    await send_question(update, context)
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is running")
+async def send_question(update, context):
+    q_index = context.user_data['q_index']
+    if q_index >= len(QUESTIONS):
+        score = context.user_data['score']
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Quiz Khatam! 🎉\nAapka Score: {score}/{len(QUESTIONS)}")
+        return
 
-def run_server():
-    port = int(os.environ.get("PORT", 10000))
-    HTTPServer(('0.0.0.0', port), Handler).serve_forever()
+    q_data = QUESTIONS[q_index]
+    keyboard = []
+    for i, opt in enumerate(q_data['options']):
+        keyboard.append([InlineKeyboardButton(opt, callback_data=str(i))])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    text = f"Q{q_index+1}: {q_data['q']}"
+    
+    # Agar /quiz command se aaya hai to naya message, warna purane ko edit karo
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(text=text, reply_markup=reply_markup)
 
-if __name__ == '__main__':
-    threading.Thread(target=run_server, daemon=True).start()
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    q_index = context.user_data['q_index']
+    q_data = QUESTIONS[q_index]
+    user_ans = int(query.data)
+    
+    if user_ans == q_data['ans']:
+        context.user_data['score'] += 1
+        result = "✅ Sahi Jawab!"
+    else:
+        result = f"❌ Galat! Sahi jawab hai: {q_data['options'][q_data['ans']]}"
+    
+    await query.edit_message_text(text=f"{result}\n\nAgle sawal ka intezaar karo...")
+    
+    context.user_data['q_index'] += 1
+    # Thoda wait karke agla sawal
+    import asyncio
+    await asyncio.sleep(1)
+    await send_question(update, context)
+
+def main():
+    TOKEN = os.getenv("BOT_TOKEN")
+    app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("quiz", quiz))
-    print("Bot started...")
+    app.add_handler(CallbackQueryHandler(button_click))
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
