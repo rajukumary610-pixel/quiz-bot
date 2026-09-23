@@ -11,7 +11,7 @@ QUESTIONS = [
 
 app_flask = Flask(__name__)
 @app_flask.route('/')
-def home(): return "Bot is Live!"
+def home(): return "Bot Live Hai!"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Namaste! 🙏 /quiz likho")
@@ -44,21 +44,30 @@ async def btn(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['score']+=1
         res="✅ Sahi!"
     else:
-        res=f"❌ Galat! Sahi hai: {data['options'][data['ans']]}"
-    await q.edit_message_text(f"{res}\nAgle sawal...")
+        res=f"❌ Galat! Sahi: {data['options'][data['ans']]}"
+    await q.edit_message_text(f"{res}")
     context.user_data['q_index']+=1
     await asyncio.sleep(1)
     await send_q(update, context)
 
-def run_bot():
+async def run_bot():
     TOKEN=os.getenv("BOT_TOKEN")
     app=Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("quiz", quiz))
     app.add_handler(CallbackQueryHandler(btn))
-    app.run_polling()
+    # ye conflict fix karega
+    await app.bot.delete_webhook(drop_pending_updates=True)
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
+    await asyncio.Event().wait()
+
+def start_bot_thread():
+    asyncio.run(run_bot())
 
 if __name__=="__main__":
-    threading.Thread(target=run_bot, daemon=True).start()
+    threading.Thread(target=start_bot_thread, daemon=True).start()
     port=int(os.environ.get("PORT", 10000))
+    print(f"Starting flask on port {port}")
     app_flask.run(host="0.0.0.0", port=port)
